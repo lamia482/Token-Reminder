@@ -35,20 +35,39 @@ class MinerNotaficator:
     '''
     return self._today_date
     
+  def open_file(self):
+    '''
+    '''
+    self._today_file = open(self._today_filename, mode = 'a', encoding = 'utf-8')
+    return
+    
+  def write_file(self, msg):
+    '''
+    '''
+    self.open_file()
+    self._today_file.write(msg)
+    self.close_file()
+    return
+    
+  def close_file(self):
+    '''
+    '''
+    self._today_file.close()
+    return
+    
   def set_today(self):
     '''
     '''
     self._today_values = []
     self._today_date = str(datetime.date.today())
     self._today_filename = os.path.join('log', self._today_date + '.log')
-    self._today_file = open(self._today_filename, 'w')
     return
     
   def shut_yesterday(self):
     '''
     '''
     if self._today_file is not None:
-      self._today_file.close()
+      self.close_file()
     return
     
   def is_next_day(self):
@@ -131,7 +150,7 @@ class MinerNotaficator:
     ttime = ttime.split('.')[0]
     self._msg = str(ttime) + ' >> ' +  content[0:len(content)-2] + ' $USD\n'
     logging.info(self._msg)
-    self._today_file.write(self._msg)
+    self.write_file(self._msg)
     return
   
   def save_to_all(self, date):
@@ -173,8 +192,9 @@ class MinerNotaficator:
 if __name__ == '__main__':
   os.system('clear && mkdir -p log')
   website = 'https://www.coingecko.com/en/price_charts/{}/usd'
-  reminder = MinerNotaficator(website, 'address_here', 5)
+  reminder = MinerNotaficator(website, 'address_here', 2)
   while reminder.keep_alive() is True:
+    
     if reminder.is_next_day() is True:
       reminder.save_to_all(reminder.today_date())
       reminder.send_email(reminder.message())
@@ -187,5 +207,5 @@ if __name__ == '__main__':
     reminder.save_to_today(str(datetime.datetime.now()), info)
     vnote = reminder.remind(info.values(), vnote)
     
-    reminder.delay(300)
+    reminder.delay(60)
   
