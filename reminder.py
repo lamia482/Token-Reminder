@@ -10,6 +10,9 @@ import logging
 logging.basicConfig(level = logging.INFO)
 import smtplib
 from email.message import EmailMessage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
 
 
 class MinerNotaficator:
@@ -178,12 +181,19 @@ class MinerNotaficator:
     if self._today_date is None:
       return
     content = '' if content is None else content
+    content = 'Hi laMia, belows are the prices of tokens today, details seen in the attached\n' + content
     email_address = self._email_address if email_address is None else email_address
-    msg = EmailMessage()
-    msg.set_content(content)
+    
+    msg = MIMEMultipart()
     msg['Subject'] = 'mining notification - ' + self._today_date
     msg['From'] = 'address_here' # 'laMia.mining.notification@auto'
     msg['To'] = email_address
+    
+    puretext = MIMEText(content)
+    msg.attach(puretext)
+    txt_attach = MIMEApplication(open(self._today_filename, 'rb').read())
+    txt_attach.add_header('Content-Disposition', 'attachment', filename = self._today_filename)
+    msg.attach(txt_attach)
     
     s = smtplib.SMTP()
     s.connect('smtp.qq.com', 587)
