@@ -25,6 +25,11 @@ class MinerNotaficator:
     self._today_file = None
     self._today_values = []
     self._all_values = {}
+    self._init_max_vnotes = np.array([2.650, 0.950, 870, 410])
+    self._init_min_vnotes = np.array([2.000, 0.850, 820, 360])
+    self._max_vnotes = self._init_max_vnotes
+    self._min_vnotes = self._init_min_vnotes
+    
     self.set_url(url)
     self.set_email_address(email_address)
     self.set_delay_time(delay_time)
@@ -122,16 +127,24 @@ class MinerNotaficator:
       info[token] = value
     return info
     
-  def remind(self, values, notes):
+  def remind(self, values):
     '''
     '''
     values = np.array([i for i in values])
-    notes = np.array(notes)
-    status = np.sum(values >= notes)
-    if status > 0:
-      reminder.send_email(reminder.message())
-      notes += 1.6
-    return notes
+    
+    max_status = (values >= self._max_vnotes).astype(np.float)
+    if np.sum(max_status) > 0:
+      reminder.send_email(reminder.message() + '\nhas climbed over max\n')
+      self._max_vnotes = self._max_vnotes * (1 + max_status * 0.01)
+      self._min_vnotes = self._init_min_vnotes
+      
+    min_status = (values <= self._min_vnotes).astype(np.float)
+    if np.sum(min_status) > 0:
+      reminder.send_email(reminder.message() + '\nhas dropped to min\n')
+      self._min_vnotes = self._min_vnotes * (1 - min_status * 0.01)
+      self._max_vnotes = self._init_max_vnotes
+    
+    return
     
   def message(self):
     '''
@@ -148,9 +161,9 @@ class MinerNotaficator:
       content = content + i + ' = ' + '{:.4f}'.format(info[i]) + ', '
     self._today_values.append(value)
     ttime = ttime.split('.')[0]
-    self._msg = str(ttime) + ' >> ' +  content[0:len(content)-2] + ' $USD\n'
+    self._msg = str(ttime) + ' >> ' +  content[0:len(content)-2] + ' $USD'
     logging.info(self._msg)
-    self.write_file(self._msg)
+    self.write_file(self._msg + '\n')
     return
   
   def save_to_all(self, date):
@@ -202,10 +215,9 @@ if __name__ == '__main__':
       reminder.set_today()
     
     token = ['huobi-token', 'ripple', 'ethereum', 'zcash']
-    vnote = [2.650, 0.950, 870, 410]
     info = reminder.pull(token)
     reminder.save_to_today(str(datetime.datetime.now()), info)
-    vnote = reminder.remind(info.values(), vnote)
+    reminder.remind(info.values())
     
     reminder.delay(60)
   
