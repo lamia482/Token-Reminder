@@ -111,7 +111,8 @@ class MinerNotaficator:
     status = np.sum(values >= notes)
     if status > 0:
       reminder.send_email(reminder.message())
-    return
+      notes += 1.6
+    return notes
     
   def message(self):
     '''
@@ -125,7 +126,7 @@ class MinerNotaficator:
     content = ''
     for i in info:
       value.append(info[i])
-      content = content + i + ' = ' + str(info[i]) + ', '
+      content = content + i + ' = ' + '{:.4f}'.format(info[i]) + ', '
     self._today_values.append(value)
     ttime = ttime.split('.')[0]
     self._msg = str(ttime) + ' >> ' +  content[0:len(content)-2] + ' $USD\n'
@@ -149,13 +150,13 @@ class MinerNotaficator:
     msg = EmailMessage()
     msg.set_content(content)
     msg['Subject'] = 'mining notification - ' + self._today_date
-    msg['From'] = 'account@example.com' # 'laMia.mining.notification@auto'
+    msg['From'] = 'address_here' # 'laMia.mining.notification@auto'
     msg['To'] = email_address
     
     s = smtplib.SMTP()
     s.connect('smtp.qq.com', 587)
     s.starttls()
-    s.login(msg['From'], 'pwd@example.com')
+    s.login(msg['From'], 'password_here')
     s.send_message(msg)
     s.quit()
     logging.info('send email to {} succeed'.format(email_address))
@@ -172,7 +173,7 @@ class MinerNotaficator:
 if __name__ == '__main__':
   os.system('clear && mkdir -p log')
   website = 'https://www.coingecko.com/en/price_charts/{}/usd'
-  reminder = MinerNotaficator(website, '1216352472@qq.com', 5)
+  reminder = MinerNotaficator(website, 'address_here', 5)
   while reminder.keep_alive() is True:
     if reminder.is_next_day() is True:
       reminder.save_to_all(reminder.today_date())
@@ -184,7 +185,7 @@ if __name__ == '__main__':
     vnote = [2.650, 0.950, 870, 410]
     info = reminder.pull(token)
     reminder.save_to_today(str(datetime.datetime.now()), info)
-    reminder.remind(info.values(), vnote)
+    vnote = reminder.remind(info.values(), vnote)
     
     reminder.delay(300)
   
