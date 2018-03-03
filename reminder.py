@@ -2,6 +2,8 @@ import os, sys, time
 import datetime
 import re
 import json
+import matplotlib.pyplot as plt
+plt.switch_backend('Agg')
 import numpy as np
 import requests
 from urllib.request import Request, urlopen
@@ -18,7 +20,7 @@ from email.mime.application import MIMEApplication
 class MinerNotaficator:
   '''
   '''
-  def __init__(self, url = None, email_address = None, delay_time = None):
+  def __init__(self, url = None, email_address = None, delay_time = None, tokens = None):
     '''
     '''
     self._pid = os.getpid()
@@ -36,6 +38,8 @@ class MinerNotaficator:
     self.set_url(url)
     self.set_email_address(email_address)
     self.set_delay_time(delay_time)
+    self.set_tokens(tokens)
+    self.set_color()
     return
 
   def today_date(self):
@@ -63,12 +67,22 @@ class MinerNotaficator:
     self._today_file.close()
     return
     
+  def set_color(self):
+    '''
+    '''
+    self._color = []
+    self._color.append((255,   0,   0))
+    self._color.append((  0, 255,   0))
+    self._color.append((  0,   0, 255))
+    self._color.append((  0, 255, 255))
+    
   def set_today(self):
     '''
     '''
     self._today_values = []
     self._today_date = str(datetime.date.today())
     self._today_filename = os.path.join('log', self._today_date + '.log')
+    self._today_chart_prefix = os.path.join('chart', self._today_date)
     return
     
   def shut_yesterday(self):
@@ -103,6 +117,12 @@ class MinerNotaficator:
     self._delay_time = delay_time
     return
     
+  def set_tokens(self, tokens):
+    '''
+    '''
+    self._tokens = tokens
+    return
+    
   def keep_alive(self):
     '''
     '''
@@ -121,11 +141,11 @@ class MinerNotaficator:
     value = float(content)
     return value
     
-  def pull(self, tokens):
+  def pull(self):
     '''
     '''
     info = {}
-    for token in tokens:
+    for token in self._tokens:
       value = reminder.fetch(token)
       info[token] = value
     return info
@@ -137,12 +157,14 @@ class MinerNotaficator:
     
     max_status = (values >= self._max_vnotes).astype(np.float)
     if np.sum(max_status) > 0:
+      reminder.draw_save_chart()
       reminder.send_email(reminder.message() + '\nhas climbed over max\n')
       self._max_vnotes = self._max_vnotes * (1 + max_status * 0.01)
       self._min_vnotes = self._init_min_vnotes
       
     min_status = (values <= self._min_vnotes).astype(np.float)
     if np.sum(min_status) > 0:
+      reminder.draw_save_chart()
       reminder.send_email(reminder.message() + '\nhas dropped to min\n')
       self._min_vnotes = self._min_vnotes * (1 - min_status * 0.01)
       self._max_vnotes = self._init_max_vnotes
@@ -164,14 +186,43 @@ class MinerNotaficator:
       content = content + i + ' = ' + '{:.4f}'.format(info[i]) + ', '
     self._today_values.append(value)
     ttime = ttime.split('.')[0]
-    self._msg = str(ttime) + ' >> ' +  content[0:len(content)-2] + ' $USD'
+    self._msg = str(ttime) + ' >> ' +  content + '$USD'
     logging.info(self._msg)
     self.write_file(self._msg + '\n')
+    return
+  
+  def _extract(self, line, token):
+    '''
+    '''
+    price = float(re.findall(token + ' = (.*?),', line, re.S|re.M)[0])
+    return price
+  
+  def draw_save_chart(self):
+    '''
+    '''
+    if self._today_filename is None:
+      return
+    prices = {}
+    for token in self._tokens:
+      prices[token] = []
+    with open(self._today_filename, 'r') as fp:
+      while True:
+        line = fp.readline()
+        if line is '':
+          break
+        for token in self._tokens:
+          price = self._extract(line, token)
+          prices[token].append(price)
+      for token in self._tokens:
+        plt.clf()
+        plt.plot(prices[token])
+        plt.savefig(self._today_chart_prefix + '.' + token + '.jpg')
     return
   
   def save_to_all(self, date):
     '''
     '''
+    self.draw_save_chart()
     self._all_values[date] = self._today_values
     return
     
@@ -189,11 +240,24 @@ class MinerNotaficator:
     msg['From'] = 'address_here' # 'laMia.mining.notification@auto'
     msg['To'] = email_address
     
+    # full text
     puretext = MIMEText(content)
     msg.attach(puretext)
-    txt_attach = MIMEApplication(open(self._today_filename, 'rb').read())
-    txt_attach.add_header('Content-Disposition', 'attachment', filename = self._today_filename)
-    msg.attach(txt_attach)
+    # log file attached
+    with open(self._today_filename, 'rb') as txt_attach:
+      txt_attach = MIMEApplication(txt_attach.read())
+      txt_attach.add_header('Content-Disposition', 'attachment', filename = self._today_filename)
+      msg.attach(txt_attach)
+    # tendency chart upon log file
+    for token in self._tokens:
+      chart_file = self._today_chart_prefix + '.' + token + '.jpg'
+      try:
+        with open(chart_file, 'rb') as image_attach:
+          image_attach = MIMEApplication(image_attach.read())
+          image_attach.add_header('Content-Disposition', 'attachment', filename = chart_file)
+          msg.attach(image_attach)
+      except FileNotFoundError as ex:
+        continue
     
     s = smtplib.SMTP()
     s.connect('smtp.qq.com', 587)
@@ -215,17 +279,18 @@ class MinerNotaficator:
 if __name__ == '__main__':
   os.system('clear && mkdir -p log')
   website = 'https://www.coingecko.com/en/price_charts/{}/usd'
-  reminder = MinerNotaficator(website, 'address_here', 2)
+  reminder = MinerNotaficator(website, 'address_here', 5)
   while reminder.keep_alive() is True:
     
     if reminder.is_next_day() is True:
-      reminder.save_to_all(reminder.today_date())
+      reminder.draw_save_chart()
       reminder.send_email(reminder.message())
       reminder.shut_yesterday()
       reminder.set_today()
     
     token = ['huobi-token', 'ripple', 'ethereum', 'zcash']
-    info = reminder.pull(token)
+    reminder.set_tokens(token)
+    info = reminder.pull()
     reminder.save_to_today(str(datetime.datetime.now()), info)
     reminder.remind(info.values())
     
