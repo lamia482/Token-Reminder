@@ -277,7 +277,7 @@ class MinerNotaficator:
     
 
 if __name__ == '__main__':
-  os.system('clear && mkdir -p log')
+  os.system('clear && mkdir -p log && mkdir -p chart')
   website = 'https://www.coingecko.com/en/price_charts/{}/usd'
   reminder = MinerNotaficator(website, 'address_here', 5)
   while reminder.keep_alive() is True:
